@@ -13,7 +13,7 @@
   <!-- Navbar -->
   <nav class="navbar navbar-expand-md navbar-dark bg-dark">
     <div class="container-fluid">
-      <a class="navbar-brand" href="/"><i class="bi bi-airplane"></i> PlaneScheduler</a>
+      <a class="navbar-brand" href="/"><i class="bi bi-airplane"></i> Plane Scheduler</a>
       <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarContent">
         <span class="navbar-toggler-icon"></span>
       </button>
@@ -41,23 +41,23 @@
           <option value="">All Aircraft</option>
         </select>
       </div>
-      <div class="col-md-8 d-flex align-items-end gap-2 mt-2 mt-md-0">
-        <button class="btn btn-primary" id="newReservationBtn">
-          <i class="bi bi-plus-lg"></i> New Reservation
+      <div class="col-md-8 d-flex align-items-end flex-wrap gap-2 mt-2 mt-md-0">
+        <button class="btn btn-sm btn-primary" id="newReservationBtn">
+          <i class="bi bi-plus-lg"></i> <span class="d-none d-md-inline">New </span>Reservation
         </button>
-        <button class="btn btn-warning" data-bs-toggle="modal" data-bs-target="#issueModal">
-          <i class="bi bi-exclamation-triangle"></i> Report Issue
+        <button class="btn btn-sm btn-warning" data-bs-toggle="modal" data-bs-target="#issueModal">
+          <i class="bi bi-exclamation-triangle"></i> <span class="d-none d-md-inline">Report </span>Issue
         </button>
         <% if (user.privileges === 'admin') { %>
-        <button class="btn btn-info" id="manageUsersBtn">
-          <i class="bi bi-people"></i> Manage Users
+        <button class="btn btn-sm btn-info" id="manageUsersBtn">
+          <i class="bi bi-people"></i> Users
         </button>
-        <button class="btn btn-secondary" id="manageAircraftBtn">
-          <i class="bi bi-airplane-engines"></i> Manage Aircraft
+        <button class="btn btn-sm btn-secondary" id="manageAircraftBtn">
+          <i class="bi bi-airplane-engines"></i> Aircraft
         </button>
         <% } %>
         <% if (user.privileges === 'admin' || user.privileges === 'maintainer') { %>
-        <button class="btn btn-outline-dark" id="usageReportBtn">
+        <button class="btn btn-sm btn-outline-dark" id="usageReportBtn">
           <i class="bi bi-file-earmark-spreadsheet"></i> Usage
         </button>
         <% } %>
