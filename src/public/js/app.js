@@ -219,6 +219,27 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // ---------- Reservation form ----------
+  // When start time is set and end time is empty, default end to 2 hours later
+  const resStartInput = document.getElementById('resStart');
+  const resEndInput = document.getElementById('resEnd');
+  if (resStartInput && resEndInput) {
+    resStartInput.addEventListener('change', () => {
+      if (resEndInput.value) return;
+      const v = resStartInput.value;
+      if (!v) return;
+      const d = new Date(v);
+      if (Number.isNaN(d.getTime())) return;
+      d.setHours(d.getHours() + 2);
+      const pad = (n) => String(n).padStart(2, '0');
+      const yyyy = d.getFullYear();
+      const mm = pad(d.getMonth() + 1);
+      const dd = pad(d.getDate());
+      const hh = pad(d.getHours());
+      const min = pad(d.getMinutes());
+      resEndInput.value = `${yyyy}-${mm}-${dd}T${hh}:${min}`;
+    });
+  }
+
   document.getElementById('submitReservation').addEventListener('click', async () => {
     const btn = document.getElementById('submitReservation');
     const spinner = document.getElementById('resSpinner');
