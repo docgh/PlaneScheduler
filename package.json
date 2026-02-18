@@ -1,0 +1,26 @@
+{
+  "name": "plane-scheduler",
+  "version": "1.0.0",
+  "description": "Aircraft reservation scheduling system with calendar view, issue tracking, and email notifications",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "nodemon src/server.js"
+  },
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "connect-flash": "^0.1.1",
+    "dotenv": "^16.4.7",
+    "ejs": "^3.1.10",
+    "express": "^4.21.2",
+    "express-session": "^1.18.1",
+    "express-validator": "^7.2.1",
+    "mysql2": "^3.12.0",
+    "nodemailer": "^6.9.16",
+    "passport": "^0.7.0",
+    "passport-local": "^1.0.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.9"
+  }
+}
