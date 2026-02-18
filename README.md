@@ -7,8 +7,9 @@ Aircraft reservation scheduling system with a calendar view, issue tracking, use
 - **Calendar View** — Interactive calendar (FullCalendar) showing all aircraft reservations; month, week, and list views; click dates to create reservations
 - **Reservations** — Create, view, and delete reservations with conflict detection
 - **Aircraft Issues** — Report, resolve, and delete maintenance/squawk issues per aircraft with severity levels
+- **Reporting** - Run reports for completed reservations for billing.
 - **User Authentication** — Register/login with bcrypt-hashed passwords and session-based auth
-- **Email Notifications** — All users are notified via email when a new reservation is created
+- **Email Notifications** — Users can subscribe to notifications of new reservations for different aircraft
 - **Responsive Design** — Works on desktop and mobile (Bootstrap 5)
 - **Docker Support** — `Dockerfile` and `docker-compose.yml` included
 
@@ -66,6 +67,8 @@ The database tables are created automatically on first run.
 | `SMTP_USER` | SMTP username | — |
 | `SMTP_PASS` | SMTP password | — |
 | `SMTP_FROM` | From address for emails | — |
+| `SMTP_NO_AUTH` | Do not authenitcate | `false` |
+| `SMTP_IGNORE_TLS` | Ignore TLS Cert Path | `false` |
 
 ## Project Structure
 
@@ -102,9 +105,4 @@ PlaneScheduler/
 | PATCH | `/api/issues/:id` | Update issue status |
 | DELETE | `/api/issues/:id` | Delete issue |
 
-## Database Schema
 
-- **users** — `id`, `username`, `password` (bcrypt), `email`, `created_at`
-- **aircraft** — `id`, `tail_number`, `make`, `model`, `year`, `created_at`
-- **reservations** — `id`, `aircraft_id`, `user_id`, `title`, `start_time`, `end_time`, `notes`, `created_at`
-- **aircraft_issues** — `id`, `aircraft_id`, `reported_by`, `title`, `description`, `severity`, `status`, `created_at`, `resolved_at`
