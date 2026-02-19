@@ -27,6 +27,14 @@ document.addEventListener('DOMContentLoaded', () => {
     return `<span class="badge badge-${severity}">${severity}</span>`;
   }
 
+  // Capitalize first letter helper
+  function capitalizeFirst(str) {
+    if (str == null) return '';
+    const s = String(str);
+    if (s.length === 0) return '';
+    return s.charAt(0).toUpperCase() + s.slice(1);
+  }
+
   function formatDT(dt) {
     return new Date(dt).toLocaleString(undefined, {
       dateStyle: 'medium',
@@ -83,6 +91,8 @@ document.addEventListener('DOMContentLoaded', () => {
     calendar.render();
   }
 
+  
+
   async function fetchEvents(info, successCallback, failureCallback) {
     try {
       const selectedAc = document.getElementById('aircraftSelect').value;
@@ -94,7 +104,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const reservations = await api(`/api/reservations?${params}`);
       const events = reservations.map(r => ({
         id: r.id,
-        title: `${r.tail_number}: ${r.title}`,
+        title: `${r.tail_number}: ` + (r.title === 'Maintenance'  ? 'Maintenance' : capitalizeFirst(r.username)) + (r.notes ? ` - ${r.notes}` : ''),
         start: r.start_time,
         end: r.end_time,
         classNames: [r.completed_at ? 'ac-completed' : resTypeColor(r.title)],
