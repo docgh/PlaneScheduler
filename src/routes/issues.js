@@ -2,6 +2,7 @@ const router = require('express').Router();
 const { body, validationResult } = require('express-validator');
 const pool = require('../config/db');
 const { ensureAdminOrMaintainer } = require('../middleware/auth');
+const { notifyNewIssue } = require('../services/email');
 
 // GET /api/issues?aircraft_id=
 router.get('/', async (req, res) => {
@@ -62,6 +63,12 @@ router.post(
         severity,
         status: 'open',
       });
+
+      // Fetch aircraft for notification
+      const [acRows] = await pool.query('SELECT * FROM aircraft WHERE id = ?', [aircraft_id]);
+      if (acRows.length > 0) {
+        notifyNewIssue({ title, description, severity }, acRows[0], req.user.username);
+      }
     } catch (err) {
       console.error(err);
       res.status(500).json({ error: 'Failed to create issue' });

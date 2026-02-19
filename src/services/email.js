@@ -62,4 +62,49 @@ async function notifyNewReservation(reservation, aircraft, bookedBy) {
   }
 }
 
-module.exports = { notifyNewReservation };
+/**
+ * Notify subscribed users about a new issue reported for an aircraft
+ */
+async function notifyNewIssue(issue, aircraft, reportedBy) {
+  try {
+    const [users] = await pool.query(
+      `SELECT u.email, u.username FROM users u
+       INNER JOIN user_aircraft_subscriptions s ON u.id = s.user_id
+       WHERE s.aircraft_id = ?`,
+      [aircraft.id]
+    );
+    if (users.length === 0) return;
+
+    const recipients = users.map((u) => u.email).join(', ');
+    const severityColors = {
+      low: '#198754',
+      medium: '#ffc107',
+      high: '#fd7e14',
+      grounding: '#dc3545',
+    };
+    const color = severityColors[issue.severity] || '#6c757d';
+
+    const mailOptions = {
+      from: process.env.SMTP_FROM || 'PlaneScheduler <noreply@example.com>',
+      to: recipients,
+      subject: `Issue Reported: ${aircraft.tail_number} — ${issue.title}`,
+      html: `
+        <h2>New Aircraft Issue Reported</h2>
+        <table style="border-collapse:collapse; font-family:Arial,sans-serif;">
+          <tr><td style="padding:4px 12px;font-weight:bold;">Aircraft:</td><td style="padding:4px 12px;">${aircraft.tail_number} (${aircraft.make} ${aircraft.model})</td></tr>
+          <tr><td style="padding:4px 12px;font-weight:bold;">Reported by:</td><td style="padding:4px 12px;">${reportedBy}</td></tr>
+          <tr><td style="padding:4px 12px;font-weight:bold;">Issue:</td><td style="padding:4px 12px;">${issue.title}</td></tr>
+          <tr><td style="padding:4px 12px;font-weight:bold;">Severity:</td><td style="padding:4px 12px;"><span style="background:${color};color:#fff;padding:2px 8px;border-radius:4px;">${issue.severity.toUpperCase()}</span></td></tr>
+          ${issue.description ? `<tr><td style="padding:4px 12px;font-weight:bold;">Description:</td><td style="padding:4px 12px;">${issue.description}</td></tr>` : ''}
+        </table>
+      `,
+    };
+
+    await transporter.sendMail(mailOptions);
+    console.log(`Issue notification sent to ${users.length} subscribed user(s)`);
+  } catch (err) {
+    console.error('Issue email notification error:', err.message);
+  }
+}
+
+module.exports = { notifyNewReservation, notifyNewIssue };
