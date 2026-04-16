@@ -68,8 +68,10 @@ CREATE TABLE IF NOT EXISTS user_aircraft_subscriptions (
   FOREIGN KEY (aircraft_id) REFERENCES aircraft(id) ON DELETE CASCADE
 ) ENGINE=InnoDB;
 
--- Seed a default admin user (password: admin123)
+-- Seed a default admin user (password: admin123) only if no users exist
 -- bcrypt hash generated for 'admin123';
-INSERT IGNORE INTO users (username, password, email, privileges)
-VALUES ('admin', '$2a$10$N9qo8uLOickgx2ZMRZoMye.IjqQBrkHx3ECpOCILwCMFc/M0m4G6S', 'admin@example.com', 'admin');
+INSERT INTO users (username, password, email, privileges)
+SELECT 'admin', '$2a$10$N9qo8uLOickgx2ZMRZoMye.IjqQBrkHx3ECpOCILwCMFc/M0m4G6S', 'admin@example.com', 'admin'
+FROM DUAL
+WHERE NOT EXISTS (SELECT 1 FROM users LIMIT 1);
 

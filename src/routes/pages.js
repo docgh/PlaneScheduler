@@ -1,5 +1,5 @@
 const router = require('express').Router();
-const { ensureAuthenticated } = require('../middleware/auth');
+const { ensureAuthenticated, ensureAdminOrMaintainer } = require('../middleware/auth');
 
 // Login page
 router.get('/login', (req, res) => {
@@ -17,6 +17,16 @@ router.get('/register', (req, res) => {
 // Dashboard (main page)
 router.get('/', ensureAuthenticated, (req, res) => {
   res.render('dashboard');
+});
+
+// Settings page
+router.get('/settings', ensureAuthenticated, (req, res) => {
+  res.render('settings');
+});
+
+// Admin page
+router.get('/admin', ensureAdminOrMaintainer, (req, res) => {
+  res.render('admin');
 });
 
 module.exports = router;

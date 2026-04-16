@@ -1,9 +1,11 @@
 /* PlaneScheduler — Client-side application */
 document.addEventListener('DOMContentLoaded', () => {
   let aircraft = [];
+  let allUsers = [];
   let calendar;
   let currentUserId = null;
   let currentUserPrivileges = null;
+  let currentUserUsername = null;
 
   // ---------- helpers ----------
   async function api(url, opts = {}) {
@@ -62,12 +64,53 @@ document.addEventListener('DOMContentLoaded', () => {
         el.appendChild(opt);
       });
     });
+
+    // Hide aircraft selector if only one aircraft
+    const selectRow = document.getElementById('aircraftSelectGroup');
+    if (selectRow) {
+      if (aircraft.length <= 1) {
+        selectRow.style.display = 'none';
+        if (aircraft.length === 1) {
+          document.getElementById('aircraftSelect').value = aircraft[0].id;
+        }
+      } else {
+        selectRow.style.display = '';
+      }
+    }
+  }
+
+  // ---------- Users for reservation assignment ----------
+  async function loadUsersForDropdown() {
+    if (currentUserPrivileges === 'admin') {
+      try {
+        allUsers = await api('/api/users');
+      } catch {
+        allUsers = [{ id: currentUserId, username: currentUserUsername }];
+      }
+    } else {
+      allUsers = [{ id: currentUserId, username: currentUserUsername }];
+    }
+    populateResUserDropdown();
+  }
+
+  function populateResUserDropdown(selectedUserId) {
+    const el = document.getElementById('resUser');
+    if (!el) return;
+    el.innerHTML = '';
+    allUsers.forEach(u => {
+      const opt = document.createElement('option');
+      opt.value = u.id;
+      opt.textContent = capitalizeFirst(u.username);
+      el.appendChild(opt);
+    });
+    el.value = selectedUserId || currentUserId;
   }
 
   // ---------- Calendar ----------
   function initCalendar() {
     const calEl = document.getElementById('calendar');
     calendar = new FullCalendar.Calendar(calEl, {
+      themeSystem: 'bootstrap5',
       initialView: window.innerWidth < 768 ? 'listWeek' : 'dayGridMonth',
       headerToolbar: {
         left: 'prev,next today',
@@ -79,6 +122,8 @@ document.addEventListener('DOMContentLoaded', () => {
       eventClick: handleEventClick,
       select: handleDateSelect,
       events: fetchEvents,
+      eventMouseEnter: handleEventMouseEnter,
+      eventMouseLeave: handleEventMouseLeave,
       windowResize: (arg) => {
         if (window.innerWidth < 768) {
           calendar.changeView('listWeek');
@@ -92,6 +137,51 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   
+
+  // ---------- Event hover tooltip ----------
+  let tooltipEl = null;
+
+  function handleEventMouseEnter(info) {
+    const r = info.event.extendedProps;
+    if (tooltipEl) tooltipEl.remove();
+
+    tooltipEl = document.createElement('div');
+    tooltipEl.className = 'fc-tooltip';
+
+    let html = `<div class="tt-header">${escapeHtml(r.title)} — ${escapeHtml(r.tail_number)}</div>`;
+    html += `<div class="tt-row"><span class="tt-label">Aircraft:</span> ${escapeHtml(r.tail_number)} (${escapeHtml(r.make)} ${escapeHtml(r.model)})</div>`;
+    html += `<div class="tt-row"><span class="tt-label">User:</span> ${escapeHtml(capitalizeFirst(r.username))}</div>`;
+    html += `<div class="tt-row"><span class="tt-label">Start:</span> ${formatDT(r.start_time)}</div>`;
+    html += `<div class="tt-row"><span class="tt-label">End:</span> ${formatDT(r.end_time)}</div>`;
+    if (r.notes) html += `<div class="tt-row"><span class="tt-label">Notes:</span> ${escapeHtml(r.notes)}</div>`;
+    if (r.completed_at) html += `<div class="tt-completed"><i class="bi bi-check-circle"></i> Completed</div>`;
+
+    tooltipEl.innerHTML = html;
+    document.body.appendChild(tooltipEl);
+
+    const rect = info.el.getBoundingClientRect();
+    let top = rect.bottom + window.scrollY + 6;
+    let left = rect.left + window.scrollX;
+
+    // Keep tooltip within viewport
+    const tooltipRect = tooltipEl.getBoundingClientRect();
+    if (left + tooltipRect.width > window.innerWidth) {
+      left = window.innerWidth - tooltipRect.width - 10;
+    }
+    if (top + tooltipRect.height > window.scrollY + window.innerHeight) {
+      top = rect.top + window.scrollY - tooltipRect.height - 6;
+    }
+
+    tooltipEl.style.top = top + 'px';
+    tooltipEl.style.left = left + 'px';
+  }
+
+  function handleEventMouseLeave() {
+    if (tooltipEl) {
+      tooltipEl.remove();
+      tooltipEl = null;
+    }
+  }
 
   async function fetchEvents(info, successCallback, failureCallback) {
     try {
@@ -123,8 +213,10 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('resModalTitle').innerHTML = '<i class="bi bi-calendar-plus"></i> New Reservation';
     document.getElementById('resBtnLabel').textContent = 'Create Reservation';
     document.getElementById('resError').classList.add('d-none');
+    document.getElementById('resHobbsGroup').classList.add('d-none');
     document.getElementById('resStart').value = toLocalISO(info.start);
     document.getElementById('resEnd').value = toLocalISO(info.end);
+    populateResUserDropdown();
     const modal = new bootstrap.Modal(document.getElementById('reservationModal'));
     modal.show();
   }
@@ -145,8 +237,8 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('detailBody').innerHTML = `
       <table class="table table-sm">
         <tr><th>Type</th><td>${escapeHtml(r.title)}</td></tr>
-        <tr><th>Aircraft</th><td>${r.tail_number} (${r.make} ${r.model})</td></tr>
-        <tr><th>Reserved by</th><td>${r.username}</td></tr>
+        <tr><th>Aircraft</th><td>${escapeHtml(r.tail_number)} (${escapeHtml(r.make)} ${escapeHtml(r.model)})</td></tr>
+        <tr><th>Reserved by</th><td>${escapeHtml(capitalizeFirst(r.username))}</td></tr>
         <tr><th>Start</th><td>${formatDT(r.start_time)}</td></tr>
         <tr><th>End</th><td>${formatDT(r.end_time)}</td></tr>
         ${r.notes ? `<tr><th>Notes</th><td>${escapeHtml(r.notes)}</td></tr>` : ''}
@@ -158,10 +250,13 @@ document.addEventListener('DOMContentLoaded', () => {
     const delBtn = document.getElementById('deleteReservation');
     const compBtn = document.getElementById('completeReservation');
     const editBtn = document.getElementById('editReservation');
+    const uncompBtn = document.getElementById('uncompleteReservation');
 
-    const canEdit = !r.completed_at && (r.user_id === currentUserId || currentUserPrivileges === 'admin');
+    const isAdmin = currentUserPrivileges === 'admin';
+    const isOwner = r.user_id === currentUserId;
+    const canEdit = (!r.completed_at && (isOwner || isAdmin)) || (r.completed_at && isAdmin);
 
-    // Show edit button for owner or admin on non-completed reservations
+    // Show edit button for owner or admin on non-completed, or admin on completed
     if (canEdit) {
       editBtn.classList.remove('d-none');
       editBtn.onclick = () => {
@@ -172,17 +267,31 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('resBtnLabel').textContent = 'Save Changes';
         document.getElementById('resAircraft').value = r.aircraft_id;
         document.getElementById('resTitle').value = r.title;
+        populateResUserDropdown(r.user_id);
         document.getElementById('resStart').value = toLocalISO(r.start_time);
         document.getElementById('resEnd').value = toLocalISO(r.end_time);
         document.getElementById('resNotes').value = r.notes || '';
         document.getElementById('resError').classList.add('d-none');
+
+        // Show hobbs fields for completed reservations being edited by admin
+        const hobbsGroup = document.getElementById('resHobbsGroup');
+        if (r.completed_at && isAdmin) {
+          hobbsGroup.classList.remove('d-none');
+          document.getElementById('resStartHobbs').value = r.start_hobbs != null ? Number(r.start_hobbs).toFixed(1) : '';
+          document.getElementById('resEndHobbs').value = r.end_hobbs != null ? Number(r.end_hobbs).toFixed(1) : '';
+        } else {
+          hobbsGroup.classList.add('d-none');
+          document.getElementById('resStartHobbs').value = '';
+          document.getElementById('resEndHobbs').value = '';
+        }
+
         new bootstrap.Modal(document.getElementById('reservationModal')).show();
       };
     } else {
       editBtn.classList.add('d-none');
     }
 
-    // Show delete for owner or admin on non-completed reservations
+    // Show delete for owner or admin
     if (canEdit) {
       delBtn.classList.remove('d-none');
       delBtn.onclick = async () => {
@@ -217,6 +326,23 @@ document.addEventListener('DOMContentLoaded', () => {
       };
     } else {
       compBtn.classList.add('d-none');
+    }
+
+    // Show uncomplete button for admin on completed reservations
+    if (r.completed_at && isAdmin) {
+      uncompBtn.classList.remove('d-none');
+      uncompBtn.onclick = async () => {
+        if (!confirm('Remove completed status from this reservation? Hobbs values will be cleared.')) return;
+        try {
+          await api(`/api/reservations/${r.id}/uncomplete`, { method: 'POST' });
+          bootstrap.Modal.getInstance(document.getElementById('reservationDetailModal')).hide();
+          calendar.refetchEvents();
+        } catch (err) {
+          alert(err.message);
+        }
+      };
+    } else {
+      uncompBtn.classList.add('d-none');
     }
 
     new bootstrap.Modal(document.getElementById('reservationDetailModal')).show();
@@ -258,11 +384,23 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const payload = {
       aircraft_id: parseInt(document.getElementById('resAircraft').value, 10),
+      user_id: parseInt(document.getElementById('resUser').value, 10),
       title: document.getElementById('resTitle').value,
       start_time: document.getElementById('resStart').value,
       end_time: document.getElementById('resEnd').value,
       notes: document.getElementById('resNotes').value.trim(),
     };
+
+    // Include hobbs values if the hobbs fields are visible (admin editing completed)
+    const hobbsGroup = document.getElementById('resHobbsGroup');
+    if (!hobbsGroup.classList.contains('d-none')) {
+      const sh = document.getElementById('resStartHobbs').value;
+      const eh = document.getElementById('resEndHobbs').value;
+      if (sh !== '' && eh !== '') {
+        payload.start_hobbs = parseFloat(sh);
+        payload.end_hobbs = parseFloat(eh);
+      }
+    }
 
     if (!payload.aircraft_id || !payload.title || !payload.start_time || !payload.end_time) {
       errDiv.textContent = 'Please fill in all required fields';
@@ -289,6 +427,7 @@ document.addEventListener('DOMContentLoaded', () => {
       bootstrap.Modal.getInstance(document.getElementById('reservationModal')).hide();
       document.getElementById('reservationForm').reset();
       document.getElementById('resId').value = '';
+      document.getElementById('resHobbsGroup').classList.add('d-none');
       calendar.refetchEvents();
     } catch (err) {
       errDiv.textContent = err.message;
@@ -367,10 +506,10 @@ document.addEventListener('DOMContentLoaded', () => {
         ${canManageIssues ? `
         <div class="issue-actions">
           ${issue.status !== 'resolved' ? `
-            <button class="btn btn-sm btn-outline-success" title="Resolve" onclick="resolveIssue(${issue.id})">
+            <button class="btn btn-sm btn-outline-success" title="Resolve" data-action="resolve-issue" data-id="${issue.id}">
               <i class="bi bi-check-lg"></i>
             </button>` : ''}
-          <button class="btn btn-sm btn-outline-danger" title="Delete" onclick="deleteIssue(${issue.id})">
+          <button class="btn btn-sm btn-outline-danger" title="Delete" data-action="delete-issue" data-id="${issue.id}">
             <i class="bi bi-trash"></i>
           </button>
         </div>` : ''}
@@ -379,16 +518,29 @@ document.addEventListener('DOMContentLoaded', () => {
     }).join('');
   }
 
-  window.resolveIssue = async (id) => {
+  // ---------- Event delegation for dynamically created buttons ----------
+  document.addEventListener('click', async (e) => {
+    const btn = e.target.closest('[data-action]');
+    if (!btn) return;
+    const action = btn.dataset.action;
+    const id = parseInt(btn.dataset.id, 10);
+
+    switch (action) {
+      case 'resolve-issue': return resolveIssue(id);
+      case 'delete-issue': return deleteIssue(id);
+    }
+  });
+
+  async function resolveIssue(id) {
     try {
       await api(`/api/issues/${id}`, { method: 'PATCH', body: JSON.stringify({ status: 'resolved' }) });
       loadIssues();
     } catch (err) {
       alert(err.message);
     }
-  };
+  }
 
-  window.deleteIssue = async (id) => {
+  async function deleteIssue(id) {
     if (!confirm('Delete this issue?')) return;
     try {
       await api(`/api/issues/${id}`, { method: 'DELETE' });
@@ -495,9 +647,11 @@ document.addEventListener('DOMContentLoaded', () => {
     if (userEl) {
       currentUserId = parseInt(userEl.dataset.userId, 10);
       currentUserPrivileges = userEl.dataset.userPrivileges;
+      currentUserUsername = userEl.dataset.userUsername;
     }
 
     await loadAircraft();
+    await loadUsersForDropdown();
     initCalendar();
     await loadIssues();
 
@@ -508,444 +662,9 @@ document.addEventListener('DOMContentLoaded', () => {
       document.getElementById('resModalTitle').innerHTML = '<i class=\"bi bi-calendar-plus\"></i> New Reservation';
       document.getElementById('resBtnLabel').textContent = 'Create Reservation';
       document.getElementById('resError').classList.add('d-none');
+      document.getElementById('resHobbsGroup').classList.add('d-none');
+      populateResUserDropdown();
       new bootstrap.Modal(document.getElementById('reservationModal')).show();
     });
-    await loadSubscriptions();
-
-    // Admin: wire up Manage Users button
-    const manageUsersBtn = document.getElementById('manageUsersBtn');
-    if (manageUsersBtn) {
-      manageUsersBtn.addEventListener('click', async () => {
-        await loadAllUsers();
-        new bootstrap.Modal(document.getElementById('userManagementModal')).show();
-      });
-    }
-
-    // Admin: wire up Manage Aircraft button
-    const manageAircraftBtn = document.getElementById('manageAircraftBtn');
-    if (manageAircraftBtn) {
-      manageAircraftBtn.addEventListener('click', async () => {
-        await loadAircraftManagement();
-        new bootstrap.Modal(document.getElementById('aircraftManagementModal')).show();
-      });
-    }
-    // Admin/Maintainer: wire up Usage Report button
-    const usageReportBtn = document.getElementById('usageReportBtn');
-    if (usageReportBtn) {
-      usageReportBtn.addEventListener('click', () => {
-        // Populate aircraft dropdown
-        const sel = document.getElementById('usageAircraft');
-        sel.innerHTML = '<option value="">All Aircraft</option>';
-        aircraft.forEach(ac => {
-          const opt = document.createElement('option');
-          opt.value = ac.id;
-          opt.textContent = `${ac.tail_number} — ${ac.make} ${ac.model}`;
-          sel.appendChild(opt);
-        });
-        // Default date range: last 30 days
-        const today = new Date();
-        const thirtyAgo = new Date();
-        thirtyAgo.setDate(today.getDate() - 30);
-        document.getElementById('usageEnd').value = today.toISOString().slice(0, 10);
-        document.getElementById('usageStart').value = thirtyAgo.toISOString().slice(0, 10);
-        document.getElementById('usageError').classList.add('d-none');
-        new bootstrap.Modal(document.getElementById('usageReportModal')).show();
-      });
-    }
-
-    // Export Usage CSV
-    const exportUsageBtn = document.getElementById('exportUsage');
-    if (exportUsageBtn) {
-      exportUsageBtn.addEventListener('click', () => {
-        const errDiv = document.getElementById('usageError');
-        errDiv.classList.add('d-none');
-        const startDate = document.getElementById('usageStart').value;
-        const endDate = document.getElementById('usageEnd').value;
-        const acId = document.getElementById('usageAircraft').value;
-
-        if (!startDate || !endDate) {
-          errDiv.textContent = 'Please select both start and end dates';
-          errDiv.classList.remove('d-none');
-          return;
-        }
-        if (new Date(endDate) < new Date(startDate)) {
-          errDiv.textContent = 'End date must be on or after start date';
-          errDiv.classList.remove('d-none');
-          return;
-        }
-
-        const params = new URLSearchParams({ start: startDate, end: endDate + 'T23:59:59' });
-        if (acId) params.append('aircraft_id', acId);
-
-        // Trigger download via hidden link
-        const url = `/api/reservations/usage-csv?${params}`;
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = 'usage-report.csv';
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-      });
-    }
   })();
-
-  // ---------- Notification Subscriptions ----------
-  let subscriptions = new Set();
-
-  async function loadSubscriptions() {
-    try {
-      const subIds = await api('/api/subscriptions');
-      subscriptions = new Set(subIds);
-      renderSubscriptions();
-    } catch (err) {
-      console.error('Failed to load subscriptions:', err);
-    }
-  }
-
-  function renderSubscriptions() {
-    const container = document.getElementById('subscriptionList');
-    if (!container || aircraft.length === 0) {
-      if (container) container.innerHTML = '<span class="text-muted">No aircraft available</span>';
-      return;
-    }
-    container.innerHTML = aircraft.map(ac => {
-      const checked = subscriptions.has(ac.id) ? 'checked' : '';
-      return `
-        <div class="form-check form-check-inline me-4">
-          <input class="form-check-input sub-toggle" type="checkbox" id="sub-${ac.id}" data-ac-id="${ac.id}" ${checked}>
-          <label class="form-check-label" for="sub-${ac.id}">
-            <strong>${escapeHtml(ac.tail_number)}</strong>
-            <small class="text-muted">${escapeHtml(ac.make)} ${escapeHtml(ac.model)}</small>
-          </label>
-        </div>
-      `;
-    }).join('');
-
-    container.querySelectorAll('.sub-toggle').forEach(cb => {
-      cb.addEventListener('change', async (e) => {
-        const acId = parseInt(e.target.dataset.acId, 10);
-        e.target.disabled = true;
-        try {
-          if (e.target.checked) {
-            await api(`/api/subscriptions/${acId}`, { method: 'POST' });
-            subscriptions.add(acId);
-          } else {
-            await api(`/api/subscriptions/${acId}`, { method: 'DELETE' });
-            subscriptions.delete(acId);
-          }
-        } catch (err) {
-          e.target.checked = !e.target.checked; // revert
-          alert(err.message);
-        } finally {
-          e.target.disabled = false;
-        }
-      });
-    });
-  }
-
-  // ---------- User Management (admin) ----------
-  async function loadAllUsers() {
-    try {
-      const [pendingUsers, allUsers] = await Promise.all([
-        api('/api/users/pending'),
-        api('/api/users'),
-      ]);
-
-      // Pending users
-      const pendingList = document.getElementById('pendingUsersList');
-      const pendingCount = document.getElementById('pendingCount');
-      pendingCount.textContent = pendingUsers.length;
-
-      if (pendingUsers.length === 0) {
-        pendingList.innerHTML = '<p class="text-muted">No pending users</p>';
-      } else {
-        pendingList.innerHTML = pendingUsers.map(u => `
-          <div class="d-flex justify-content-between align-items-center border rounded p-2 mb-2">
-            <div>
-              <strong>${escapeHtml(u.username)}</strong>
-              <span class="text-muted ms-2">${escapeHtml(u.email)}</span>
-              <small class="text-muted ms-2">${new Date(u.created_at).toLocaleDateString()}</small>
-            </div>
-            <div class="d-flex gap-1">
-              <button class="btn btn-sm btn-success" onclick="approveUser(${u.id}, 'user')" title="Approve as User">
-                <i class="bi bi-check-lg"></i> Approve
-              </button>
-              <button class="btn btn-sm btn-outline-danger" onclick="rejectUser(${u.id})" title="Reject">
-                <i class="bi bi-x-lg"></i>
-              </button>
-            </div>
-          </div>
-        `).join('');
-      }
-
-      // All users table
-      const tbody = document.getElementById('allUsersBody');
-      tbody.innerHTML = allUsers.map(u => {
-        const isSelf = u.id === currentUserId;
-        return `
-          <tr>
-            <td>${escapeHtml(u.username)}</td>
-            <td>${escapeHtml(u.email)}</td>
-            <td><span class="badge bg-${u.privileges === 'admin' ? 'danger' : u.privileges === 'maintainer' ? 'warning text-dark' : u.privileges === 'pending' ? 'secondary' : 'primary'}">${u.privileges}</span></td>
-            <td>
-              <div class="d-flex gap-1">
-                <button class="btn btn-sm btn-outline-primary" onclick="editUser(${u.id})" title="Edit">
-                  <i class="bi bi-pencil"></i>
-                </button>
-                ${isSelf ? '' :
-                  `<button class="btn btn-sm btn-outline-danger" onclick="deleteUser(${u.id})" title="Delete">
-                    <i class="bi bi-trash"></i>
-                  </button>`}
-              </div>
-            </td>
-          </tr>
-        `;
-      }).join('');
-    } catch (err) {
-      console.error('Failed to load users:', err);
-    }
-  }
-
-  // Wire up Add User button
-  const addUserBtn = document.getElementById('addUserBtn');
-  if (addUserBtn) {
-    addUserBtn.addEventListener('click', () => {
-      document.getElementById('userFormTitle').innerHTML = '<i class="bi bi-person-plus"></i> Add User';
-      document.getElementById('userForm').reset();
-      document.getElementById('ufId').value = '';
-      document.getElementById('ufPassword').required = true;
-      document.getElementById('ufPasswordHint').textContent = '';
-      document.getElementById('ufError').classList.add('d-none');
-      new bootstrap.Modal(document.getElementById('userFormModal')).show();
-    });
-  }
-
-  window.editUser = async (id) => {
-    try {
-      const users = await api('/api/users');
-      const u = users.find(x => x.id === id);
-      if (!u) return alert('User not found');
-
-      document.getElementById('userFormTitle').innerHTML = '<i class="bi bi-pencil"></i> Edit User';
-      document.getElementById('ufId').value = u.id;
-      document.getElementById('ufUsername').value = u.username;
-      document.getElementById('ufEmail').value = u.email;
-      document.getElementById('ufPassword').value = '';
-      document.getElementById('ufPassword').required = false;
-      document.getElementById('ufPasswordHint').textContent = '(leave blank to keep current)';
-      document.getElementById('ufPrivileges').value = u.privileges;
-      document.getElementById('ufError').classList.add('d-none');
-      new bootstrap.Modal(document.getElementById('userFormModal')).show();
-    } catch (err) {
-      alert(err.message);
-    }
-  };
-
-  // Submit user add/edit form
-  const submitUserFormBtn = document.getElementById('submitUserForm');
-  if (submitUserFormBtn) {
-    submitUserFormBtn.addEventListener('click', async () => {
-      const btn = submitUserFormBtn;
-      const spinner = document.getElementById('ufSpinner');
-      const errDiv = document.getElementById('ufError');
-      errDiv.classList.add('d-none');
-
-      const id = document.getElementById('ufId').value;
-      const payload = {
-        username: document.getElementById('ufUsername').value.trim(),
-        email: document.getElementById('ufEmail').value.trim(),
-        privileges: document.getElementById('ufPrivileges').value,
-      };
-      const password = document.getElementById('ufPassword').value;
-      if (password) payload.password = password;
-
-      if (!payload.username || !payload.email) {
-        errDiv.textContent = 'Username and email are required';
-        errDiv.classList.remove('d-none');
-        return;
-      }
-      if (!id && !password) {
-        errDiv.textContent = 'Password is required for new users';
-        errDiv.classList.remove('d-none');
-        return;
-      }
-
-      btn.disabled = true;
-      spinner.classList.remove('d-none');
-      try {
-        if (id) {
-          await api(`/api/users/${id}`, { method: 'PUT', body: JSON.stringify(payload) });
-        } else {
-          await api('/api/users', { method: 'POST', body: JSON.stringify(payload) });
-        }
-        bootstrap.Modal.getInstance(document.getElementById('userFormModal')).hide();
-        await loadAllUsers();
-      } catch (err) {
-        errDiv.textContent = err.message;
-        errDiv.classList.remove('d-none');
-      } finally {
-        btn.disabled = false;
-        spinner.classList.add('d-none');
-      }
-    });
-  }
-
-  window.approveUser = async (id, privileges) => {
-    try {
-      await api(`/api/users/${id}`, { method: 'PATCH', body: JSON.stringify({ privileges }) });
-      await loadAllUsers();
-    } catch (err) {
-      alert(err.message);
-    }
-  };
-
-  window.rejectUser = async (id) => {
-    if (!confirm('Reject and delete this user?')) return;
-    try {
-      await api(`/api/users/${id}`, { method: 'DELETE' });
-      await loadAllUsers();
-    } catch (err) {
-      alert(err.message);
-    }
-  };
-
-  window.changeUserPrivileges = async (id, privileges) => {
-    try {
-      await api(`/api/users/${id}`, { method: 'PATCH', body: JSON.stringify({ privileges }) });
-      await loadAllUsers();
-    } catch (err) {
-      alert(err.message);
-      await loadAllUsers();
-    }
-  };
-
-  window.deleteUser = async (id) => {
-    if (!confirm('Delete this user? This cannot be undone.')) return;
-    try {
-      await api(`/api/users/${id}`, { method: 'DELETE' });
-      await loadAllUsers();
-    } catch (err) {
-      alert(err.message);
-    }
-  };
-
-  // ---------- Aircraft Management (admin) ----------
-  async function loadAircraftManagement() {
-    try {
-      const acList = await api('/api/aircraft');
-      const tbody = document.getElementById('aircraftMgmtBody');
-      tbody.innerHTML = acList.map(ac => `
-        <tr>
-          <td><strong>${escapeHtml(ac.tail_number)}</strong></td>
-          <td>${escapeHtml(ac.make)}</td>
-          <td>${escapeHtml(ac.model)}</td>
-          <td>${ac.year || '—'}</td>
-          <td>${Number(ac.last_hobbs).toFixed(1)}</td>
-          <td>
-            <div class="d-flex gap-1">
-              <button class="btn btn-sm btn-outline-primary" onclick="editAircraft(${ac.id})" title="Edit">
-                <i class="bi bi-pencil"></i>
-              </button>
-              <button class="btn btn-sm btn-outline-danger" onclick="deleteAircraft(${ac.id})" title="Delete">
-                <i class="bi bi-trash"></i>
-              </button>
-            </div>
-          </td>
-        </tr>
-      `).join('');
-    } catch (err) {
-      console.error('Failed to load aircraft:', err);
-    }
-  }
-
-  // Wire up Add Aircraft button
-  const addAircraftBtn = document.getElementById('addAircraftBtn');
-  if (addAircraftBtn) {
-    addAircraftBtn.addEventListener('click', () => {
-      document.getElementById('acFormTitle').innerHTML = '<i class="bi bi-airplane"></i> Add Aircraft';
-      document.getElementById('aircraftForm').reset();
-      document.getElementById('acfId').value = '';
-      document.getElementById('acfHobbs').value = '0.0';
-      document.getElementById('acfError').classList.add('d-none');
-      new bootstrap.Modal(document.getElementById('aircraftFormModal')).show();
-    });
-  }
-
-  window.editAircraft = async (id) => {
-    try {
-      const ac = await api(`/api/aircraft/${id}`);
-      document.getElementById('acFormTitle').innerHTML = '<i class="bi bi-pencil"></i> Edit Aircraft';
-      document.getElementById('acfId').value = ac.id;
-      document.getElementById('acfTail').value = ac.tail_number;
-      document.getElementById('acfMake').value = ac.make;
-      document.getElementById('acfModel').value = ac.model;
-      document.getElementById('acfYear').value = ac.year || '';
-      document.getElementById('acfHobbs').value = ac.last_hobbs ? Number(ac.last_hobbs).toFixed(1) : '0.0';
-      document.getElementById('acfError').classList.add('d-none');
-      new bootstrap.Modal(document.getElementById('aircraftFormModal')).show();
-    } catch (err) {
-      alert(err.message);
-    }
-  };
-
-  window.deleteAircraft = async (id) => {
-    if (!confirm('Delete this aircraft? All its reservations and issues will also be deleted.')) return;
-    try {
-      await api(`/api/aircraft/${id}`, { method: 'DELETE' });
-      await loadAircraftManagement();
-      // Refresh the aircraft dropdowns on the main page
-      await loadAircraft();
-      calendar.refetchEvents();
-      loadIssues();
-    } catch (err) {
-      alert(err.message);
-    }
-  };
-
-  // Submit aircraft add/edit form
-  const submitAircraftFormBtn = document.getElementById('submitAircraftForm');
-  if (submitAircraftFormBtn) {
-    submitAircraftFormBtn.addEventListener('click', async () => {
-      const btn = submitAircraftFormBtn;
-      const spinner = document.getElementById('acfSpinner');
-      const errDiv = document.getElementById('acfError');
-      errDiv.classList.add('d-none');
-
-      const id = document.getElementById('acfId').value;
-      const payload = {
-        tail_number: document.getElementById('acfTail').value.trim(),
-        make: document.getElementById('acfMake').value.trim(),
-        model: document.getElementById('acfModel').value.trim(),
-        year: document.getElementById('acfYear').value ? parseInt(document.getElementById('acfYear').value, 10) : null,
-        last_hobbs: parseFloat(document.getElementById('acfHobbs').value) || 0,
-      };
-
-      if (!payload.tail_number || !payload.make || !payload.model) {
-        errDiv.textContent = 'Tail number, make, and model are required';
-        errDiv.classList.remove('d-none');
-        return;
-      }
-
-      btn.disabled = true;
-      spinner.classList.remove('d-none');
-      try {
-        if (id) {
-          await api(`/api/aircraft/${id}`, { method: 'PUT', body: JSON.stringify(payload) });
-        } else {
-          await api('/api/aircraft', { method: 'POST', body: JSON.stringify(payload) });
-        }
-        bootstrap.Modal.getInstance(document.getElementById('aircraftFormModal')).hide();
-        await loadAircraftManagement();
-        // Refresh aircraft dropdowns on main page
-        await loadAircraft();
-        calendar.refetchEvents();
-      } catch (err) {
-        errDiv.textContent = err.message;
-        errDiv.classList.remove('d-none');
-      } finally {
-        btn.disabled = false;
-        spinner.classList.add('d-none');
-      }
-    });
-  }
 });

@@ -153,9 +153,49 @@
 }
 
 /* Reservation type colours */
-.res-personal    { background-color: #0d6efd !important; }
-.res-shared       { background-color: #0d6efd !important; }
-.res-maintenance  { background-color: #6c757d !important; }
+.res-personal    { background-color: #a8c7fa !important; color: #0a2540 !important; }
+.res-shared      { background-color: #a8c7fa !important; color: #0a2540 !important; }
+.res-maintenance { background-color: #c4c8cc !important; color: #1a1a1a !important; }
 
 /* Completed reservation */
-.ac-completed { background-color: #198754 !important; }
+.ac-completed { background-color: #a3d9b1 !important; color: #0a3622 !important; }
+
+/* Event hover tooltip */
+.fc-tooltip {
+  position: absolute;
+  z-index: 10000;
+  background: #fff;
+  color: #212529;
+  border: 1px solid #dee2e6;
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  padding: 10px 14px;
+  font-size: 0.85rem;
+  line-height: 1.5;
+  max-width: 280px;
+  pointer-events: none;
+  white-space: normal;
+}
+
+.fc-tooltip .tt-header {
+  font-weight: 700;
+  margin-bottom: 4px;
+  border-bottom: 1px solid #eee;
+  padding-bottom: 4px;
+}
+
+.fc-tooltip .tt-row {
+  display: flex;
+  gap: 6px;
+}
+
+.fc-tooltip .tt-label {
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.fc-tooltip .tt-completed {
+  color: #198754;
+  font-weight: 600;
+  margin-top: 4px;
+}

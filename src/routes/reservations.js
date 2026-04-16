@@ -37,21 +37,27 @@ router.get('/usage-csv', async (req, res) => {
     const [rows] = await pool.query(query, params);
 
     // Build CSV
+    function sanitizeCsvCell(val) {
+      const s = String(val ?? '');
+      if (/^[=+\-@\t\r]/.test(s)) return "'" + s;
+      return s;
+    }
+
     const headers = ['ID', 'Tail Number', 'User', 'Type', 'Start', 'End', 'Hobbs Start', 'Hobbs End', 'Hobbs Used', 'Completed', 'Notes'];
     const csvRows = [headers.join(',')];
     rows.forEach(r => {
       const line = [
         r.id,
-        `"${r.tail_number}"`,
-        `"${r.username}"`,
-        `"${r.type}"`,
+        `"${sanitizeCsvCell(r.tail_number)}"`,
+        `"${sanitizeCsvCell(r.username)}"`,
+        `"${sanitizeCsvCell(r.type)}"`,
         `"${new Date(r.start_time).toISOString()}"`,
         `"${new Date(r.end_time).toISOString()}"`,
         r.start_hobbs ?? '',
         r.end_hobbs ?? '',
         r.hobbs_used ?? '',
         `"${new Date(r.completed_at).toISOString()}"`,
-        `"${(r.notes || '').replace(/"/g, '""')}"`,
+        `"${sanitizeCsvCell((r.notes || '')).replace(/"/g, '""')}"`,
       ];
       csvRows.push(line.join(','));
     });
@@ -109,6 +115,7 @@ router.post(
     body('title').isIn(['Personal', 'Shared', 'Maintenance']).withMessage('Type must be Personal, Shared, or Maintenance'),
     body('start_time').isISO8601().withMessage('Valid start time required'),
     body('end_time').isISO8601().withMessage('Valid end time required'),
+    body('user_id').optional().isInt().withMessage('User ID must be an integer'),
   ],
   async (req, res) => {
     const errors = validationResult(req);
@@ -117,7 +124,16 @@ router.post(
     }
 
     try {
-      const { aircraft_id, title, start_time, end_time, notes } = req.body;
+      const { aircraft_id, title, start_time, end_time, notes, user_id } = req.body;
+
+      // Only admins can assign reservations to other users
+      let assignedUserId = req.user.id;
+      if (user_id && user_id !== req.user.id) {
+        if (req.user.privileges !== 'admin') {
+          return res.status(403).json({ error: 'Only admins can assign reservations to other users' });
+        }
+        assignedUserId = user_id;
+      }
 
       // Check for overlapping reservations
       const [conflicts] = await pool.query(
@@ -134,7 +150,7 @@ router.post(
       const [result] = await pool.query(
         `INSERT INTO reservations (aircraft_id, user_id, title, start_time, end_time, notes)
          VALUES (?, ?, ?, ?, ?, ?)`,
-        [aircraft_id, req.user.id, title, start_time, end_time, notes || null]
+        [aircraft_id, assignedUserId, title, start_time, end_time, notes || null]
       );
 
       const reservation = {
@@ -188,6 +204,13 @@ router.post('/:id/complete', async (req, res) => {
 
     const reservation = rows[0];
 
+    // Only owner, admin, or maintainer can complete
+    if (reservation.user_id !== req.user.id
+        && req.user.privileges !== 'admin'
+        && req.user.privileges !== 'maintainer') {
+      return res.status(403).json({ error: 'Not authorized to complete this reservation' });
+    }
+
     if (reservation.completed_at) {
       return res.status(400).json({ error: 'Reservation already completed' });
     }
@@ -221,6 +244,7 @@ router.put(
     body('title').isIn(['Personal', 'Shared', 'Maintenance']).withMessage('Type must be Personal, Shared, or Maintenance'),
     body('start_time').isISO8601().withMessage('Valid start time required'),
     body('end_time').isISO8601().withMessage('Valid end time required'),
+    body('user_id').optional().isInt().withMessage('User ID must be an integer'),
   ],
   async (req, res) => {
     const errors = validationResult(req);
@@ -238,11 +262,21 @@ router.put(
         return res.status(403).json({ error: 'Not authorized' });
       }
 
-      if (reservation.completed_at) {
+      // Non-admins cannot edit completed reservations
+      if (reservation.completed_at && req.user.privileges !== 'admin') {
         return res.status(400).json({ error: 'Cannot edit a completed reservation' });
       }
 
-      const { aircraft_id, title, start_time, end_time, notes } = req.body;
+      const { aircraft_id, title, start_time, end_time, notes, user_id, start_hobbs, end_hobbs } = req.body;
+
+      // Only admins can reassign reservations to other users
+      let assignedUserId = reservation.user_id;
+      if (user_id && user_id !== reservation.user_id) {
+        if (req.user.privileges !== 'admin') {
+          return res.status(403).json({ error: 'Only admins can reassign reservations to other users' });
+        }
+        assignedUserId = user_id;
+      }
 
       // Check for overlapping reservations (exclude this one)
       const [conflicts] = await pool.query(
@@ -254,18 +288,70 @@ router.put(
         return res.status(409).json({ error: 'Time slot conflicts with an existing reservation' });
       }
 
-      await pool.query(
-        `UPDATE reservations SET aircraft_id = ?, title = ?, start_time = ?, end_time = ?, notes = ? WHERE id = ?`,
-        [aircraft_id, title, start_time, end_time, notes || null, req.params.id]
-      );
+      // If admin is editing a completed reservation, allow hobbs updates
+      if (reservation.completed_at && req.user.privileges === 'admin') {
+        if (start_hobbs != null && end_hobbs != null) {
+          if (isNaN(Number(start_hobbs)) || isNaN(Number(end_hobbs))) {
+            return res.status(400).json({ error: 'Hobbs values must be numbers' });
+          }
+          if (Number(end_hobbs) < Number(start_hobbs)) {
+            return res.status(400).json({ error: 'Hobbs end must be >= Hobbs start' });
+          }
+          await pool.query(
+            `UPDATE reservations SET aircraft_id = ?, user_id = ?, title = ?, start_time = ?, end_time = ?, notes = ?, start_hobbs = ?, end_hobbs = ? WHERE id = ?`,
+            [aircraft_id, assignedUserId, title, start_time, end_time, notes || null, start_hobbs, end_hobbs, req.params.id]
+          );
+          // Update aircraft lastHobbs
+          await pool.query('UPDATE aircraft SET last_hobbs = ? WHERE id = ?', [end_hobbs, reservation.aircraft_id]);
+        } else {
+          await pool.query(
+            `UPDATE reservations SET aircraft_id = ?, user_id = ?, title = ?, start_time = ?, end_time = ?, notes = ? WHERE id = ?`,
+            [aircraft_id, assignedUserId, title, start_time, end_time, notes || null, req.params.id]
+          );
+        }
+      } else {
+        await pool.query(
+          `UPDATE reservations SET aircraft_id = ?, user_id = ?, title = ?, start_time = ?, end_time = ?, notes = ? WHERE id = ?`,
+          [aircraft_id, assignedUserId, title, start_time, end_time, notes || null, req.params.id]
+        );
+      }
 
-      res.json({ id: parseInt(req.params.id), aircraft_id, title, start_time, end_time, notes });
+      res.json({ id: parseInt(req.params.id), aircraft_id, user_id: assignedUserId, title, start_time, end_time, notes });
     } catch (err) {
       console.error(err);
       res.status(500).json({ error: 'Failed to update reservation' });
     }
   }
 );
+
+// POST /api/reservations/:id/uncomplete (admin only)
+router.post('/:id/uncomplete', async (req, res) => {
+  try {
+    if (req.user.privileges !== 'admin') {
+      return res.status(403).json({ error: 'Admin privileges required' });
+    }
+
+    const [rows] = await pool.query('SELECT * FROM reservations WHERE id = ?', [req.params.id]);
+    if (rows.length === 0) {
+      return res.status(404).json({ error: 'Reservation not found' });
+    }
+
+    const reservation = rows[0];
+    if (!reservation.completed_at) {
+      return res.status(400).json({ error: 'Reservation is not completed' });
+    }
+
+    await pool.query(
+      'UPDATE reservations SET start_hobbs = NULL, end_hobbs = NULL, completed_at = NULL WHERE id = ?',
+      [req.params.id]
+    );
+
+    res.json({ message: 'Reservation completion status removed' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to uncomplete reservation' });
+  }
+});
 
 // DELETE /api/reservations/:id
 router.delete('/:id', async (req, res) => {

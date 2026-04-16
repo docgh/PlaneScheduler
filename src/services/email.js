@@ -20,6 +20,16 @@ if (!skipAuth) {
 
 const transporter = nodemailer.createTransport(transportOpts);
 
+function escapeHtml(str) {
+  if (str == null) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 /**
  * Notify subscribed users about a reservation change for an aircraft
  */
@@ -40,16 +50,16 @@ async function notifyNewReservation(reservation, aircraft, bookedBy) {
     const mailOptions = {
       from: process.env.SMTP_FROM || 'PlaneScheduler <noreply@example.com>',
       to: recipients,
-      subject: `${reservation.title} Reservation: ${aircraft.tail_number}`,
+      subject: `${escapeHtml(reservation.title)} Reservation: ${escapeHtml(aircraft.tail_number)}`,
       html: `
         <h2>New Aircraft Reservation</h2>
         <table style="border-collapse:collapse; font-family:Arial,sans-serif;">
-          <tr><td style="padding:4px 12px;font-weight:bold;">Type:</td><td style="padding:4px 12px;">${reservation.title}</td></tr>
-          <tr><td style="padding:4px 12px;font-weight:bold;">Aircraft:</td><td style="padding:4px 12px;">${aircraft.tail_number} (${aircraft.make} ${aircraft.model})</td></tr>
-          <tr><td style="padding:4px 12px;font-weight:bold;">Reserved by:</td><td style="padding:4px 12px;">${bookedBy}</td></tr>
-          <tr><td style="padding:4px 12px;font-weight:bold;">Start:</td><td style="padding:4px 12px;">${startDate}</td></tr>
-          <tr><td style="padding:4px 12px;font-weight:bold;">End:</td><td style="padding:4px 12px;">${endDate}</td></tr>
-          ${reservation.notes ? `<tr><td style="padding:4px 12px;font-weight:bold;">Notes:</td><td style="padding:4px 12px;">${reservation.notes}</td></tr>` : ''}
+          <tr><td style="padding:4px 12px;font-weight:bold;">Type:</td><td style="padding:4px 12px;">${escapeHtml(reservation.title)}</td></tr>
+          <tr><td style="padding:4px 12px;font-weight:bold;">Aircraft:</td><td style="padding:4px 12px;">${escapeHtml(aircraft.tail_number)} (${escapeHtml(aircraft.make)} ${escapeHtml(aircraft.model)})</td></tr>
+          <tr><td style="padding:4px 12px;font-weight:bold;">Reserved by:</td><td style="padding:4px 12px;">${escapeHtml(bookedBy)}</td></tr>
+          <tr><td style="padding:4px 12px;font-weight:bold;">Start:</td><td style="padding:4px 12px;">${escapeHtml(startDate)}</td></tr>
+          <tr><td style="padding:4px 12px;font-weight:bold;">End:</td><td style="padding:4px 12px;">${escapeHtml(endDate)}</td></tr>
+          ${reservation.notes ? `<tr><td style="padding:4px 12px;font-weight:bold;">Notes:</td><td style="padding:4px 12px;">${escapeHtml(reservation.notes)}</td></tr>` : ''}
         </table>
       `,
     };
@@ -87,15 +97,15 @@ async function notifyNewIssue(issue, aircraft, reportedBy) {
     const mailOptions = {
       from: process.env.SMTP_FROM || 'PlaneScheduler <noreply@example.com>',
       to: recipients,
-      subject: `Issue Reported: ${aircraft.tail_number} — ${issue.title}`,
+      subject: `Issue Reported: ${escapeHtml(aircraft.tail_number)} — ${escapeHtml(issue.title)}`,
       html: `
         <h2>New Aircraft Issue Reported</h2>
         <table style="border-collapse:collapse; font-family:Arial,sans-serif;">
-          <tr><td style="padding:4px 12px;font-weight:bold;">Aircraft:</td><td style="padding:4px 12px;">${aircraft.tail_number} (${aircraft.make} ${aircraft.model})</td></tr>
-          <tr><td style="padding:4px 12px;font-weight:bold;">Reported by:</td><td style="padding:4px 12px;">${reportedBy}</td></tr>
-          <tr><td style="padding:4px 12px;font-weight:bold;">Issue:</td><td style="padding:4px 12px;">${issue.title}</td></tr>
-          <tr><td style="padding:4px 12px;font-weight:bold;">Severity:</td><td style="padding:4px 12px;"><span style="background:${color};color:#fff;padding:2px 8px;border-radius:4px;">${issue.severity.toUpperCase()}</span></td></tr>
-          ${issue.description ? `<tr><td style="padding:4px 12px;font-weight:bold;">Description:</td><td style="padding:4px 12px;">${issue.description}</td></tr>` : ''}
+          <tr><td style="padding:4px 12px;font-weight:bold;">Aircraft:</td><td style="padding:4px 12px;">${escapeHtml(aircraft.tail_number)} (${escapeHtml(aircraft.make)} ${escapeHtml(aircraft.model)})</td></tr>
+          <tr><td style="padding:4px 12px;font-weight:bold;">Reported by:</td><td style="padding:4px 12px;">${escapeHtml(reportedBy)}</td></tr>
+          <tr><td style="padding:4px 12px;font-weight:bold;">Issue:</td><td style="padding:4px 12px;">${escapeHtml(issue.title)}</td></tr>
+          <tr><td style="padding:4px 12px;font-weight:bold;">Severity:</td><td style="padding:4px 12px;"><span style="background:${color};color:#fff;padding:2px 8px;border-radius:4px;">${escapeHtml(issue.severity.toUpperCase())}</span></td></tr>
+          ${issue.description ? `<tr><td style="padding:4px 12px;font-weight:bold;">Description:</td><td style="padding:4px 12px;">${escapeHtml(issue.description)}</td></tr>` : ''}
         </table>
       `,
     };
