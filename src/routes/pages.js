@@ -1,3 +1,4 @@
+const path = require('path');
 const router = require('express').Router();
 const { ensureAuthenticated, ensureAdminOrMaintainer } = require('../middleware/auth');
 
@@ -27,6 +28,11 @@ router.get('/settings', ensureAuthenticated, (req, res) => {
 // Admin page
 router.get('/admin', ensureAdminOrMaintainer, (req, res) => {
   res.render('admin');
+});
+
+// Performance tool (public)
+router.get('/perf', (req, res) => {
+  res.sendFile(path.join(__dirname, '..', 'public', 'tools', 'E90_Runway_Analysis.html'));
 });
 
 module.exports = router;
