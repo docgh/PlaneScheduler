@@ -83,6 +83,26 @@
           </div>
         </div>
 
+        <!-- CalDAV Sync -->
+        <div class="card shadow-sm mb-4">
+          <div class="card-header bg-light">
+            <strong><i class="bi bi-calendar3"></i> CalDAV Sync</strong>
+            <small class="text-muted ms-2">Read-only reservation calendar for mobile devices</small>
+          </div>
+          <div class="card-body">
+            <p class="mb-2">Use this URL in your calendar app (CalDAV account type):</p>
+            <div class="input-group mb-2">
+              <input type="text" class="form-control" id="caldavUrl" value="<%= caldavUrl %>" readonly>
+              <button class="btn btn-outline-secondary" type="button" id="copyCaldavBtn">
+                <i class="bi bi-clipboard"></i> Copy
+              </button>
+            </div>
+            <small class="text-muted d-block">Username: <strong><%= user.username %></strong></small>
+            <small class="text-muted d-block">Password: your PlaneScheduler password</small>
+            <div id="copyCaldavMsg" class="text-success mt-2 d-none">Copied CalDAV URL.</div>
+          </div>
+        </div>
+
         <a href="/" class="btn btn-outline-secondary"><i class="bi bi-arrow-left"></i> Back to Dashboard</a>
       </div>
     </div>

@@ -3,6 +3,28 @@ document.addEventListener('DOMContentLoaded', () => {
   let aircraft = [];
   let subscriptions = new Set();
 
+  const copyBtn = document.getElementById('copyCaldavBtn');
+  const caldavInput = document.getElementById('caldavUrl');
+  const copyMsg = document.getElementById('copyCaldavMsg');
+
+  if (copyBtn && caldavInput) {
+    copyBtn.addEventListener('click', async () => {
+      const text = caldavInput.value;
+      try {
+        await navigator.clipboard.writeText(text);
+      } catch (_err) {
+        caldavInput.focus();
+        caldavInput.select();
+        document.execCommand('copy');
+      }
+
+      if (copyMsg) {
+        copyMsg.classList.remove('d-none');
+        setTimeout(() => copyMsg.classList.add('d-none'), 2000);
+      }
+    });
+  }
+
   async function api(url, opts = {}) {
     opts.headers = { 'Content-Type': 'application/json', ...opts.headers };
     const res = await fetch(url, opts);

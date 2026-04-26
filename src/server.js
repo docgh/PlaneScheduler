@@ -17,6 +17,7 @@ const issueRoutes = require('./routes/issues');
 const userRoutes = require('./routes/users');
 const subscriptionRoutes = require('./routes/subscriptions');
 const pageRoutes = require('./routes/pages');
+const caldavRoutes = require('./routes/caldav');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -104,6 +105,7 @@ app.use('/api/reservations', ensureAuthenticated, reservationRoutes);
 app.use('/api/issues', ensureAuthenticated, issueRoutes);
 app.use('/api/users', ensureAdmin, userRoutes);
 app.use('/api/subscriptions', ensureAuthenticated, subscriptionRoutes);
+app.use('/caldav', caldavRoutes);
 
 // Error handler
 app.use((err, req, res, next) => {

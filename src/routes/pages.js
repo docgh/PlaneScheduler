@@ -22,7 +22,14 @@ router.get('/', ensureAuthenticated, (req, res) => {
 
 // Settings page
 router.get('/settings', ensureAuthenticated, (req, res) => {
-  res.render('settings');
+  const forwardedProto = (req.get('x-forwarded-proto') || '').split(',')[0].trim();
+  const forwardedHost = (req.get('x-forwarded-host') || '').split(',')[0].trim();
+  const detectedProtocol = forwardedProto || req.protocol;
+  const protocol = detectedProtocol === 'http' ? 'https' : detectedProtocol;
+  const host = forwardedHost || req.get('host');
+  const username = encodeURIComponent(req.user.username);
+  const caldavUrl = `${protocol}://${host}/caldav/calendars/${username}/reservations`;
+  res.render('settings', { caldavUrl });
 });
 
 // Admin page
