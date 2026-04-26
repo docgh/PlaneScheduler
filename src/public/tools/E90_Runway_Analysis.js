@@ -344,8 +344,8 @@ function compute() {
     // Weight-adjusted V-speeds (simplified: scale VR/V50 with sqrt(W/W_ref))
     if (tow !== null) {
         var factor = Math.sqrt(tow / 10100);
-        $('vs_vr').textContent = Math.round(95 * factor);
-        $('vs_v50').textContent = Math.round(100 * factor);
+        $('vs_vr').textContent = Math.max(AC.vmca, Math.round(95 * factor));
+        $('vs_v50').textContent = Math.max(AC.vmca, Math.round(100 * factor));
     }
 
     // Landing
